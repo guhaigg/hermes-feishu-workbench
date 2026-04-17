@@ -1,0 +1,5 @@
+include README.md
+include LICENSE
+include plugin.yaml
+recursive-include feishu_workbench_plugin/references *.md
+recursive-include feishu_workbench_plugin/skills */SKILL.md

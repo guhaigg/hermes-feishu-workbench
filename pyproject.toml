@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-feishu-workbench"
+version = "0.1.0"
+description = "Feishu插件 Hermes特供版本 - Feishu/Lark workflow guardrails and skills for Hermes Agent"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "guhai + Codex" }
+]
+keywords = ["hermes", "feishu", "lark", "plugin", "skills"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.entry-points."hermes_agent.plugins"]
+feishu-workbench = "feishu_workbench_plugin:register"
+
+[project.urls]
+Homepage = "https://github.com/guhaigg/hermes-feishu-workbench"
+Repository = "https://github.com/guhaigg/hermes-feishu-workbench"
+Issues = "https://github.com/guhaigg/hermes-feishu-workbench/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["feishu_workbench_plugin*"]
+
+[tool.setuptools.package-data]
+feishu_workbench_plugin = [
+  "references/*.md",
+  "skills/*/SKILL.md",
+]
