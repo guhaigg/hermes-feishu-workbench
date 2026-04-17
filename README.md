@@ -161,6 +161,12 @@ hermes plugins install https://github.com/guhaigg/hermes-feishu-workbench.git
 
 然后重启 Hermes。
 
+也可以用 GitHub 简写：
+
+```bash
+hermes plugins install guhaigg/hermes-feishu-workbench
+```
+
 ### 方式 2：手动安装到 Hermes 插件目录
 
 把整个项目目录放到：
@@ -184,6 +190,45 @@ pip install git+https://github.com/guhaigg/hermes-feishu-workbench.git
 ```
 
 Hermes 会通过 `hermes_agent.plugins` entry point 自动发现插件。
+
+## 关联到 Hermes Skills Hub
+
+Hermes 的插件下载和技能下载是两套入口：
+
+- 插件入口：`hermes plugins install ...`
+- 技能入口：`hermes skills install ...`
+
+这个仓库同时提供了标准 `skills/` 目录，所以也可以作为 Skills Hub 的自定义 GitHub 源使用。
+
+### 直接安装单个 skill
+
+不添加 tap 也可以直接装：
+
+```bash
+hermes skills install guhaigg/hermes-feishu-workbench/skills/feishu-auth-doctor --force
+hermes skills install guhaigg/hermes-feishu-workbench/skills/feishu-chatops --force
+hermes skills install guhaigg/hermes-feishu-workbench/skills/feishu-office --force
+```
+
+### 添加为自定义 skill 源
+
+```bash
+hermes skills tap add guhaigg/hermes-feishu-workbench
+hermes skills search feishu --source github
+```
+
+之后可以通过搜索结果安装。
+
+### 进入 Hermes 官方下载列表
+
+如果要变成 Hermes 里的 `official/...` 技能，需要给 Hermes 官方仓库提交 PR，把技能放进 Hermes 主仓的 `optional-skills/`。这会变成官方可浏览来源：
+
+```bash
+hermes skills browse --source official
+hermes skills install official/<category>/<skill>
+```
+
+当前这个仓库属于社区 GitHub 源；只有合入 Hermes 主仓后才会变成 official。
 
 ## 使用
 
