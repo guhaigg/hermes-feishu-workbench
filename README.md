@@ -151,6 +151,257 @@ feishu-workbench:feishu-office
 
 如果 Hermes 主体没有对应工具，这个插件不会凭空变出飞书 API 能力。
 
+## 飞书开放平台权限配置
+
+如果你希望 Hermes 在飞书里实现前面说的完整办公助手能力，需要在 **飞书开放平台** 给对应应用开通权限，并发布应用。
+
+入口：
+
+```text
+飞书开放平台 -> 你的应用 -> 权限管理 -> 批量导入/导出权限 -> 导入
+```
+
+然后粘贴下面 JSON。
+
+> 说明：这是一份偏“全能力”的推荐配置，覆盖消息、文档、Wiki、Drive、Sheets、多维表格、日历、任务、通讯录和用户 OAuth。  
+> 如果你只想开最小权限，可以按功能分组删减；但删减后对应 Hermes 能力会不可用。
+
+```json
+{
+  "scopes": {
+    "tenant": [
+      "application:application:self_manage",
+
+      "im:chat:read",
+      "im:chat:update",
+      "im:chat.members:read",
+      "im:message:readonly",
+      "im:message.group_at_msg:readonly",
+      "im:message.group_msg",
+      "im:message.group_msg:readonly",
+      "im:message.p2p_msg:readonly",
+      "im:message.pins:read",
+      "im:message.pins:write_only",
+      "im:message.reactions:read",
+      "im:message.reactions:write_only",
+      "im:message:recall",
+      "im:message:send_as_bot",
+      "im:message:send_multi_users",
+      "im:message:send_sys_msg",
+      "im:message:update",
+      "im:resource",
+
+      "contact:contact.base:readonly",
+      "contact:user.base:readonly",
+      "contact:user.basic_profile:readonly",
+      "contact:user.employee_id:readonly",
+
+      "search:docs:read",
+
+      "drive:drive.metadata:readonly",
+      "drive:file:download",
+      "drive:file:upload",
+
+      "docx:document:create",
+      "docx:document:readonly",
+      "docx:document:write_only",
+      "docx:document.block:convert",
+
+      "docs:document:copy",
+      "docs:document:export",
+      "docs:document.comment:create",
+      "docs:document.comment:delete",
+      "docs:document.comment:read",
+      "docs:document.comment:update",
+      "docs:document.comment:write_only",
+      "docs:document.media:download",
+      "docs:document.media:upload",
+
+      "wiki:space:read",
+      "wiki:space:retrieve",
+      "wiki:space:write_only",
+      "wiki:node:read",
+      "wiki:node:retrieve",
+      "wiki:node:create",
+      "wiki:node:move",
+      "wiki:node:copy",
+
+      "sheets:spreadsheet.meta:read",
+      "sheets:spreadsheet:read",
+      "sheets:spreadsheet:create",
+      "sheets:spreadsheet:write_only",
+
+      "base:app:read",
+      "base:app:create",
+      "base:app:update",
+      "base:app:copy",
+      "base:table:read",
+      "base:table:create",
+      "base:table:update",
+      "base:field:read",
+      "base:field:create",
+      "base:field:update",
+      "base:field:delete",
+      "base:record:retrieve",
+      "base:record:create",
+      "base:record:update",
+      "base:record:delete",
+      "base:view:read",
+      "base:view:write_only",
+
+      "calendar:calendar:read",
+      "calendar:calendar.event:read",
+      "calendar:calendar.event:create",
+      "calendar:calendar.event:update",
+      "calendar:calendar.event:reply",
+      "calendar:calendar.free_busy:read",
+
+      "task:task:read",
+      "task:task:write",
+      "task:task:writeonly",
+      "task:tasklist:read",
+      "task:tasklist:write",
+      "task:comment:read",
+      "task:comment:write",
+
+      "cardkit:card:read",
+      "cardkit:card:write"
+    ],
+    "user": [
+      "offline_access",
+
+      "search:message",
+      "search:docs:read",
+
+      "im:chat:read",
+      "im:chat.members:read",
+      "im:message",
+      "im:message.send_as_user",
+      "im:message:readonly",
+      "im:message.group_msg:get_as_user",
+      "im:message.p2p_msg:get_as_user",
+      "im:message.reactions:read",
+      "im:message.reactions:write_only",
+      "im:resource",
+
+      "contact:contact.base:readonly",
+      "contact:user.base:readonly",
+      "contact:user.basic_profile:readonly",
+      "contact:user.employee_id:readonly",
+      "contact:user:search",
+
+      "drive:drive.metadata:readonly",
+      "drive:file:download",
+      "drive:file:upload",
+
+      "docx:document:create",
+      "docx:document:readonly",
+      "docx:document:write_only",
+      "docx:document.block:convert",
+
+      "docs:document:copy",
+      "docs:document:export",
+      "docs:document.comment:create",
+      "docs:document.comment:delete",
+      "docs:document.comment:read",
+      "docs:document.comment:update",
+      "docs:document.comment:write_only",
+      "docs:document.media:download",
+      "docs:document.media:upload",
+
+      "wiki:space:read",
+      "wiki:space:retrieve",
+      "wiki:space:write_only",
+      "wiki:node:read",
+      "wiki:node:retrieve",
+      "wiki:node:create",
+      "wiki:node:move",
+      "wiki:node:copy",
+
+      "sheets:spreadsheet.meta:read",
+      "sheets:spreadsheet:read",
+      "sheets:spreadsheet:create",
+      "sheets:spreadsheet:write_only",
+
+      "base:app:read",
+      "base:app:create",
+      "base:app:update",
+      "base:app:copy",
+      "base:table:read",
+      "base:table:create",
+      "base:table:update",
+      "base:field:read",
+      "base:field:create",
+      "base:field:update",
+      "base:field:delete",
+      "base:record:retrieve",
+      "base:record:create",
+      "base:record:update",
+      "base:record:delete",
+      "base:view:read",
+      "base:view:write_only",
+
+      "calendar:calendar:read",
+      "calendar:calendar.event:read",
+      "calendar:calendar.event:create",
+      "calendar:calendar.event:update",
+      "calendar:calendar.event:reply",
+      "calendar:calendar.free_busy:read",
+
+      "task:task:read",
+      "task:task:write",
+      "task:task:writeonly",
+      "task:tasklist:read",
+      "task:tasklist:write",
+      "task:comment:read",
+      "task:comment:write"
+    ]
+  }
+}
+```
+
+### 权限和功能对应关系
+
+| 功能 | 主要权限 |
+|---|---|
+| 飞书里和 Hermes 对话、机器人回复 | `im:message.group_at_msg:readonly`, `im:message.p2p_msg:readonly`, `im:message:send_as_bot`, `im:chat:read` |
+| 群聊 / 单聊历史读取、thread 上下文 | `im:message:readonly`, `im:message.group_msg:get_as_user`, `im:message.p2p_msg:get_as_user`, `im:chat:read` |
+| 搜索飞书消息 | `search:message`, `im:message`, `im:message:readonly`, `offline_access` |
+| 用户态发消息 / 回复 | `im:message`, `im:message.send_as_user` |
+| Reaction / 表情 | `im:message.reactions:read`, `im:message.reactions:write_only` |
+| 图片 / 文件 / 媒体资源 | `im:resource`, `drive:file:upload`, `drive:file:download` |
+| 文档 / Wiki / Drive 搜索和读取 | `search:docs:read`, `docx:document:readonly`, `drive:drive.metadata:readonly`, `wiki:space:read`, `wiki:node:read` |
+| 文档创建 / 更新 / 附件 | `docx:document:create`, `docx:document:write_only`, `docx:document.block:convert`, `docs:document.media:upload`, `docs:document.media:download` |
+| 电子表格 Sheets | `sheets:spreadsheet.meta:read`, `sheets:spreadsheet:read`, `sheets:spreadsheet:create`, `sheets:spreadsheet:write_only` |
+| 多维表格 Bitable/Base | `base:app:*`, `base:table:*`, `base:field:*`, `base:record:*`, `base:view:*` 对应的读写权限 |
+| 日历 | `calendar:calendar:read`, `calendar:calendar.event:*`, `calendar:calendar.free_busy:read` |
+| 任务 | `task:task:*`, `task:tasklist:*`, `task:comment:*` |
+| 通讯录 / 找人 / 群成员 | `contact:user:search`, `contact:user.base:readonly`, `contact:contact.base:readonly`, `im:chat.members:read` |
+
+### 导入后必须做的事
+
+1. 在飞书开放平台确认新增权限并提交申请。
+2. 发布应用。只保存权限但不发布，线上 bot / OAuth token 不会拿到新权限。
+3. 如果新增了 **用户权限**，需要让 Hermes 重新走一次：
+
+```text
+/feishu auth
+```
+
+4. 授权后建议验证：
+
+```text
+/feishu diagnose
+/feishu doctor
+```
+
+如果 `/feishu doctor` 仍提示缺 scope，通常是：
+
+- 权限导入了但没有发布应用
+- 用户 OAuth 没重授
+- 当前企业没有批准敏感权限
+- 目标文档 / 表格 / 日历 / 任务本身没有共享给当前用户或应用
+
 ## 安装
 
 ### 方式 1：Hermes 插件安装
