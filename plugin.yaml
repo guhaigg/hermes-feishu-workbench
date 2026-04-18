@@ -1,5 +1,5 @@
 name: feishu-workbench
-version: 0.1.1
+version: 0.1.2
 description: Feishu插件 Hermes特供版本 - Feishu/Lark workflows, concise response guardrails, and Hermes-specific skills
 author: guhai + Codex
 provides_hooks:
