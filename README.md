@@ -12,13 +12,13 @@
 
 ## 当前真实状态
 
-当前版本：`0.2.1`
+当前版本：`0.3.0`
 
 已经包含：
 
 - 一个 Hermes plugin entry point：`feishu-workbench`
 - 一个 `pre_llm_call` hook：识别飞书相关任务后注入简洁口径与 discovery-first 约束
-- 一个 `feishu-workbench-lite` 插件工具集，提供 5 个轻量自包含工具，直接走 Feishu OpenAPI app 身份，减少大 tool schema 触发上游 502 的概率
+- 一个 `feishu-workbench-lite` 插件工具集，提供 9 个轻量自包含工具，直接走 Feishu OpenAPI app 身份，减少大 tool schema 触发上游 502 的概率
 - 3 个 plugin skills：
   - `feishu-workbench:feishu-auth-doctor`
   - `feishu-workbench:feishu-chatops`
@@ -164,7 +164,11 @@ platform_toolsets:
 - `feishu_lite_list_tasklists` -> 代理 Hermes 主仓 `feishu_list_tasklists`
 - `feishu_lite_list_docs` -> 代理 Hermes 主仓 `feishu_list_docs`
 - `feishu_lite_list_resources` -> 代理 Hermes 主仓 `feishu_list_resources`
-- `feishu_lite_search_doc_wiki` -> 代理 Hermes 主仓 `feishu_search_doc_wiki`
+- `feishu_lite_search_doc_wiki` -> 轻量 doc/wiki 标题搜索
+- `feishu_lite_list_bases` -> 轻量 Base / Bitable 枚举
+- `feishu_lite_list_sheets` -> 轻量 Sheets 枚举
+- `feishu_lite_get_messages` -> 按明确 chat_id 读取消息
+- `feishu_lite_get_thread_messages` -> 按明确 thread_id / message_id 读取线程消息
 
 这些工具 schema 比完整 Feishu 工具集小很多，适合先验证链路。当前实现直接使用 FEISHU_APP_ID / FEISHU_APP_SECRET 调 Feishu OpenAPI app 身份，不再依赖 Hermes 主仓额外提供同名 discovery 工具。
 

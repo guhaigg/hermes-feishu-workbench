@@ -39,7 +39,7 @@ def main() -> None:
     assert any(name == "pre_llm_call" for name, _callback in ctx.hooks)
     assert len(ctx.skills) == 3
     assert all(path.exists() for _, path, _ in ctx.skills)
-    assert len(ctx.tools) == 5
+    assert len(ctx.tools) == 9
     assert {toolset for _, toolset, *_ in ctx.tools} == {"feishu-workbench-lite"}
     assert all(name.startswith("feishu_lite_") for name, *_ in ctx.tools)
     assert ctx.commands == []

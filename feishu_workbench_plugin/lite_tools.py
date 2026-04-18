@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from datetime import datetime
 from functools import lru_cache
 from typing import Any
@@ -113,10 +112,15 @@ def _normalize_obj_types(raw: Any) -> set[str]:
         "base": {"base", "bitable"},
         "bases": {"base", "bitable"},
         "bitable": {"base", "bitable"},
+        "bitables": {"base", "bitable"},
         "doc": {"doc", "docx"},
         "docs": {"doc", "docx"},
+        "document": {"doc", "docx"},
+        "documents": {"doc", "docx"},
         "sheet": {"sheet"},
         "sheets": {"sheet"},
+        "spreadsheet": {"sheet"},
+        "spreadsheets": {"sheet"},
         "wiki": {"wiki"},
         "wikis": {"wiki"},
     }
@@ -133,7 +137,16 @@ def _build_node_urls(node: dict[str, Any]) -> tuple[str | None, str | None]:
     obj_token = str(node.get("obj_token") or "").strip()
     obj_type = str(node.get("obj_type") or "").strip().lower()
     wiki_url = f"{base}/wiki/{node_token}" if node_token else None
-    path_map = {"doc": "docx", "docx": "docx", "sheet": "sheet", "bitable": "base", "base": "base", "wiki": "wiki"}
+    path_map = {
+        "doc": "docx",
+        "docx": "docx",
+        "sheet": "sheet",
+        "slides": "slides",
+        "mindnote": "mindnote",
+        "bitable": "base",
+        "base": "base",
+        "wiki": "wiki",
+    }
     object_path = path_map.get(obj_type or "", "")
     object_url = f"{base}/{object_path}/{obj_token}" if object_path and obj_token else None
     if obj_type == "wiki" and wiki_url:
@@ -156,6 +169,8 @@ def _request_ok(action: str, endpoint: str, result: dict[str, Any], **data: Any)
     return _ok(action=action, endpoint=endpoint, result=result, **data)
 
 
+# ---------- Discovery: calendars / tasklists ----------
+
 def list_calendars(args: dict[str, Any], **_kw: Any) -> str:
     endpoint = "/open-apis/calendar/v4/calendars"
     result_limit = max(1, min(int(args.get("limit") or args.get("page_size") or 20), 50))
@@ -167,7 +182,7 @@ def list_calendars(args: dict[str, Any], **_kw: Any) -> str:
             "calendar_id": str(item.get("calendar_id") or item.get("id") or "").strip() or None,
             "summary": str(item.get("summary") or item.get("name") or item.get("title") or "").strip() or None,
             "description": str(item.get("description") or "").strip() or None,
-            "is_primary": bool(item.get("is_primary") or item.get("default")),
+            "is_primary": bool(item.get("is_primary") or item.get("default") or str(item.get("type") or '').lower() == 'primary'),
         })
     return _request_ok("list_calendars", endpoint, result, identity="app", inventory_scope="app_visible_calendars", is_full_account_inventory=False, count=min(len(items), result_limit), results=items[:result_limit], note="Lists calendars visible to the current app identity.")
 
@@ -184,8 +199,10 @@ def list_tasklists(args: dict[str, Any], **_kw: Any) -> str:
             "name": str(item.get("name") or item.get("title") or "").strip() or None,
             "is_default": bool(item.get("is_default") or item.get("default")),
         })
-    return _request_ok("list_tasklists", endpoint, result, identity="app", inventory_scope="app_visible_tasklists", is_full_account_inventory=False, count=len(items), results=items, note="Lists tasklists visible to the current app identity.")
+    return _request_ok("list_tasklists", endpoint, result, identity="app", inventory_scope="app_visible_tasklists", is_full_account_inventory=False, count=min(len(items), result_limit), results=items[:result_limit], note="Lists tasklists visible to the current app identity.")
 
+
+# ---------- Discovery: docs / resources / bases / sheets ----------
 
 def _list_spaces() -> tuple[list[dict[str, Any]], str | None]:
     spaces: list[dict[str, Any]] = []
@@ -325,6 +342,161 @@ def search_doc_wiki(args: dict[str, Any], **_kw: Any) -> str:
     return _scan_resources(args, default_obj_types=["doc", "docx", "wiki"], action="search_doc_wiki")
 
 
+def list_bases(args: dict[str, Any], **_kw: Any) -> str:
+    return _scan_resources(args, default_obj_types=["bitable", "base"], action="list_bases")
+
+
+def list_sheets(args: dict[str, Any], **_kw: Any) -> str:
+    return _scan_resources(args, default_obj_types=["sheet"], action="list_sheets")
+
+
+# ---------- Read messages ----------
+
+def _normalize_message_text(msg_type: str, raw_content: str) -> str:
+    content = str(raw_content or "")
+    if not content:
+        return ""
+    try:
+        payload = json.loads(content)
+    except Exception:
+        return content
+    if msg_type == "text":
+        return str(payload.get("text") or "")
+    if msg_type == "post":
+        try:
+            lines = []
+            zh = payload.get("zh_cn") if isinstance(payload.get("zh_cn"), dict) else {}
+            title = str(zh.get("title") or "").strip()
+            if title:
+                lines.append(title)
+            for block in zh.get("content") or []:
+                row = []
+                for item in block or []:
+                    if isinstance(item, dict):
+                        text = str(item.get("text") or "").strip()
+                        if text:
+                            row.append(text)
+                if row:
+                    lines.append(" ".join(row))
+            return "\n".join(lines).strip()
+        except Exception:
+            return content
+    for key in ("text", "title", "content"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return content
+
+
+def _format_message_item(item: dict[str, Any]) -> dict[str, Any]:
+    body = item.get("body") if isinstance(item.get("body"), dict) else {}
+    sender = item.get("sender") if isinstance(item.get("sender"), dict) else {}
+    sender_id = None
+    sender_name = None
+    sender_id_type = sender.get("id_type")
+    sender_type = sender.get("sender_type")
+    if isinstance(sender.get("sender_id"), dict):
+        sid = sender.get("sender_id")
+        sender_id = sid.get("open_id") or sid.get("user_id") or sid.get("union_id")
+        sender_name = sid.get("name") or None
+    return {
+        "message_id": item.get("message_id"),
+        "root_id": item.get("root_id") or None,
+        "thread_id": item.get("thread_id") or None,
+        "reply_to": item.get("parent_id") or None,
+        "upper_message_id": item.get("upper_message_id") or None,
+        "chat_id": item.get("chat_id") or None,
+        "msg_type": item.get("msg_type"),
+        "content": _normalize_message_text(item.get("msg_type", ""), body.get("content", "") or ""),
+        "create_time": _normalize_timestamp(item.get("create_time")),
+        "update_time": _normalize_timestamp(item.get("update_time")),
+        "deleted": bool(item.get("deleted", False)),
+        "updated": bool(item.get("updated", False)),
+        "sender": {
+            "id": sender_id,
+            "name": sender_name,
+            "sender_type": sender_type,
+            "id_type": sender_id_type,
+        },
+    }
+
+
+def _map_sort_type(value: str) -> str:
+    return "ByCreateTimeAsc" if (value or "").strip() == "ByCreateTimeAsc" else "ByCreateTimeDesc"
+
+
+def _list_messages(*, action: str, container_id_type: str, container_id: str, page_size: int = 20, page_token: str | None = None, sort_type: str = "ByCreateTimeDesc", resolved_thread_id: str | None = None, resolution_source: str | None = None) -> str:
+    result = request_json("GET", "/open-apis/im/v1/messages", query={
+        "container_id_type": container_id_type,
+        "container_id": container_id,
+        "sort_type": sort_type,
+        "page_size": page_size,
+        "page_token": page_token or None,
+    })
+    if result.get("code") not in (0, None):
+        return _err(result.get("msg") or result.get("message") or "message listing failed", action=action, endpoint="/open-apis/im/v1/messages", result=result)
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    raw_items = data.get("items") if isinstance(data, dict) else None
+    items = [item for item in (raw_items or []) if isinstance(item, dict)]
+    response = {
+        "success": True,
+        "action": action,
+        "identity": "app",
+        "container_id_type": container_id_type,
+        "container_id": container_id,
+        "messages": [_format_message_item(item) for item in items],
+        "count": len(items),
+        "has_more": bool(data.get("has_more", False)) if isinstance(data, dict) else False,
+        "page_token": data.get("page_token") if isinstance(data, dict) else None,
+        "sort_type": sort_type,
+        "note": "This tool uses the configured Feishu app identity. For group history, the app must have group-message permission and the bot must be in the group.",
+    }
+    if resolved_thread_id:
+        response["resolved_thread_id"] = resolved_thread_id
+    if resolution_source:
+        response["resolution_source"] = resolution_source
+    return json.dumps(response, ensure_ascii=False)
+
+
+def _resolve_thread_id(thread_id_or_message_id: str) -> tuple[str | None, str | None, str | None]:
+    value = (thread_id_or_message_id or "").strip()
+    if not value:
+        return None, None, "thread_id is required"
+    if value.startswith("omt_"):
+        return value, "thread_id", None
+    if not value.startswith("om_"):
+        return None, None, "thread_id must be a thread id (omt_xxx) or a message id (om_xxx)"
+    result = request_json("GET", f"/open-apis/im/v1/messages/{value}", query={"user_id_type": "open_id"})
+    if result.get("code") not in (0, None):
+        return None, None, f"thread resolution failed: {result.get('msg') or result.get('message') or 'Unknown API error'}"
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    message_obj = data.get("message") if isinstance(data.get("message"), dict) else None
+    if not message_obj and isinstance(data.get("items"), list) and data.get("items") and isinstance(data.get("items")[0], dict):
+        message_obj = data.get("items")[0]
+    if not isinstance(message_obj, dict):
+        return None, None, "thread resolution failed: message payload missing"
+    resolved = str(message_obj.get("thread_id") or "").strip()
+    if not resolved:
+        return None, None, "the provided message has no thread_id"
+    return resolved, "message_id", None
+
+
+def get_messages(args: dict[str, Any], **_kw: Any) -> str:
+    chat_id = str(args.get("chat_id") or "").strip()
+    if not chat_id:
+        return _err("chat_id is required", action="get_messages")
+    page_size = max(1, min(int(args.get("page_size") or args.get("limit") or 20), 50))
+    return _list_messages(action="get_messages", container_id_type="chat", container_id=chat_id, page_size=page_size, page_token=str(args.get("page_token") or "").strip() or None, sort_type=_map_sort_type(str(args.get("sort_type") or "")))
+
+
+def get_thread_messages(args: dict[str, Any], **_kw: Any) -> str:
+    resolved_thread_id, resolution_source, error = _resolve_thread_id(str(args.get("thread_id") or ""))
+    if error:
+        return _err(error, action="get_thread_messages")
+    page_size = max(1, min(int(args.get("page_size") or args.get("limit") or 20), 50))
+    return _list_messages(action="get_thread_messages", container_id_type="thread", container_id=resolved_thread_id or "", page_size=page_size, page_token=str(args.get("page_token") or "").strip() or None, sort_type=_map_sort_type(str(args.get("sort_type") or "")), resolved_thread_id=resolved_thread_id, resolution_source=resolution_source)
+
+
 def lite_tools() -> dict[str, dict[str, Any]]:
     return {
         "feishu_lite_list_calendars": {"description": "List calendars visible to the current Feishu app identity.", "handler": list_calendars},
@@ -332,4 +504,11 @@ def lite_tools() -> dict[str, dict[str, Any]]:
         "feishu_lite_list_docs": {"description": "List doc/wiki resources visible to the current Feishu app identity.", "handler": list_docs},
         "feishu_lite_list_resources": {"description": "List mixed resources visible to the current Feishu app identity inside reachable wiki spaces.", "handler": list_resources},
         "feishu_lite_search_doc_wiki": {"description": "Search doc/wiki titles visible to the current Feishu app identity.", "handler": search_doc_wiki},
+        "feishu_lite_list_bases": {"description": "List Base/Bitable resources visible to the current Feishu app identity.", "handler": list_bases},
+        "feishu_lite_list_sheets": {"description": "List Sheet resources visible to the current Feishu app identity.", "handler": list_sheets},
+        "feishu_lite_get_messages": {"description": "List messages from a known Feishu chat_id using app identity.", "handler": get_messages},
+        "feishu_lite_get_thread_messages": {"description": "List replies from a known Feishu thread_id or source message_id using app identity.", "handler": get_thread_messages},
     }
+
+
+

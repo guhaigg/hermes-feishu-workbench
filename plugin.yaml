@@ -1,6 +1,6 @@
 name: feishu-workbench
-version: 0.2.1
-description: Feishu插件 Hermes特供版本 - Feishu/Lark workflows, concise response guardrails, Hermes-specific skills, and Feishu Lite proxy tools
+version: 0.3.0
+description: Feishu插件 Hermes特供版本 - Feishu/Lark workflows, concise response guardrails, Hermes-specific skills, and self-contained Feishu Workbench Lite tools
 author: guhai + Codex
 provides_hooks:
   - pre_llm_call
@@ -10,3 +10,7 @@ provides_tools:
   - feishu_lite_list_docs
   - feishu_lite_list_resources
   - feishu_lite_search_doc_wiki
+  - feishu_lite_list_bases
+  - feishu_lite_list_sheets
+  - feishu_lite_get_messages
+  - feishu_lite_get_thread_messages
