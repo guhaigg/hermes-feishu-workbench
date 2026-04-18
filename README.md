@@ -1,353 +1,288 @@
-# Feishu插件 Hermes特供版本
+# Feishu 插件 Hermes 特供版本
 
-一个面向 **Hermes Agent** 的飞书 / Lark 插件包。
+面向 **Hermes Agent** 的飞书 / Lark 工作流插件包。
 
-它不重写 Hermes 的飞书底层连接、OAuth、消息网关和工具实现；它负责把飞书相关任务的 **工作流、答复口径、提示注入、技能包** 独立整理出来，让 Hermes 在处理飞书任务时更像一个靠谱的办公助手。
+这个仓库不是飞书官方插件，也不是 OpenClaw 官方插件；它是基于 Hermes 当前已经接入的飞书能力、参考飞书官方插件的使用体验后，整理出来的 **Hermes 特供版插件 / skill 包**。
 
-## 致谢 Linux.do
+> 当前版本重点是让 Hermes 在飞书任务里说清楚、少乱猜、优先 discovery、减少无意义卡片与内部实现废话。它不负责替代 Hermes 主仓里的飞书 OpenAPI 工具实现。
 
-感谢 Linux.do 佬友们的一切分享。
+## 致谢
 
-LinuxDo 地址：[https://linux.do/](https://linux.do/)
+感谢 [Linux.do](https://linux.do/) 佬友们的一切分享。
 
-## 这个插件解决什么
+## 当前真实状态
 
-Hermes 飞书能力越来越多以后，容易出现几个问题：
+当前版本：`0.1.0`
 
-- 输出太长，夹带很多对人无意义的内部解释
-- 搜不到就说“没有”，没有区分无权限、不可见、未授权、确实无结果
-- 不先枚举资源就直接尝试修改
-- 遇到 OAuth / scope 问题时，原因和下一步说不清楚
-- 文档、表格、日历、任务、消息这些能力分散，缺少统一使用口径
+已经包含：
 
-这个插件做的是使用层增强：
+- 一个 Hermes plugin entry point：`feishu-workbench`
+- 一个 `pre_llm_call` hook：识别飞书相关任务后注入简洁口径与 discovery-first 约束
+- 3 个 plugin skills：
+  - `feishu-workbench:feishu-auth-doctor`
+  - `feishu-workbench:feishu-chatops`
+  - `feishu-workbench:feishu-office`
+- 一份能力说明：`feishu_workbench_plugin/references/capabilities.md`
+- smoke test：`scripts/smoke_test.py`
+- GitHub Actions CI：`.github/workflows/ci.yml`
 
-- 给飞书任务自动注入简洁口径
-- 让 Hermes 优先走 discovery-first 流程
-- 提供三个可显式调用的 Feishu plugin skills
-- 把“授权诊断 / 聊天流 / 办公流”的经验沉淀成独立包
+没有包含：
 
-## 设计说明
+- 不内置飞书 App ID / App Secret / token
+- 不新建飞书开放平台应用
+- 不实现完整 OpenClaw 官方飞书插件的所有 API
+- 不替代 Hermes 主仓里的 Feishu tools
+- 不提供 `hermes feishu-workbench ...` 顶层 CLI 命令
+- 不保证“全账号枚举所有资源”；能看到什么取决于 Hermes 当前身份、scope、飞书 API 权限和可见空间
 
-本项目参考了现有 **飞书官方插件 / OpenClaw 飞书插件** 的功能组织方式和使用体验，按 Hermes 当前已有的飞书工具链做了模仿、裁剪和适配。
+## 它能让 Hermes 在飞书里做什么
 
-重点不是复刻官方插件的全部 OpenAPI 实现，而是把对 Hermes 有用的部分整理成：
+前提：你的 Hermes 主体已经接入并启用了对应 Feishu tools。
 
-- 更清晰的飞书任务口径
-- 更少废话的卡片 / 回执风格
-- discovery-first 的办公流
-- 可显式调用的 Hermes plugin skills
+### 授权 / 诊断类任务
 
-如果 Hermes 主体没有实现某个飞书 API，这个插件不会凭空补上底层能力。
-
-## 当前功能
-
-### 1. 飞书任务自动口径注入
-
-插件会注册一个 `pre_llm_call` hook。
-
-当当前任务明显与飞书 / Lark 相关时，会自动给 Hermes 注入这些规则：
-
-- 先结论，再限制，再下一步
-- 优先 discovery，再 action
-- 0 结果不等于不存在
-- 明确区分：
-  - 无结果
-  - 无权限
-  - 应用不可见
-  - 未授权
-- 缺权限时直接说缺什么 scope 或需要什么授权动作
-- 不输出原始授权 URL、长 scope 列表、内部 trace 套话
-
-### 2. 三个 plugin skills
-
-安装后会注册三个 namespaced skills：
-
-```text
-feishu-workbench:feishu-auth-doctor
-feishu-workbench:feishu-chatops
-feishu-workbench:feishu-office
-```
-
-#### `feishu-workbench:feishu-auth-doctor`
-
-适合：
+适用场景：
 
 - `/feishu auth`
 - `/feishu diagnose`
 - `/feishu doctor`
-- OAuth 掉线
-- scope 缺失
-- user token 需重授
+- `/feishu scopes`
+- 用户 OAuth / app token / scope 问题排查
 
-核心口径：
+目标：
 
-- 当前状态
-- 缺口
-- 下一步
+- 缺权限时直接说缺什么 scope
+- token 失效时直接提示重授
+- 不把“没有结果”说成“账号里不存在”
+- 不用一大坨内部实现解释污染聊天
 
-#### `feishu-workbench:feishu-chatops`
+### 消息 / ChatOps
 
-适合：
+适用场景：
 
-- 读取飞书会话历史
-- 读取话题 / thread
-- 消息搜索
-- 用户态发消息 / 回复
-- reaction
-- 消息资源下载
+- 读取明确 chat / thread 的历史
+- 搜索消息
+- 发送 / 回复消息
+- reaction / 附件资源相关任务
 
-核心口径：
+目标：
 
-- 先明确 `chat_id` / `thread_id` / `message_id`
-- 优先读明确对象，不默认全局搜
-- 搜不到不等于不存在
+- 有明确 chat_id / thread_id 时优先读明确范围
+- 不把“能读当前会话”吹成“能全局搜索所有消息”
+- 对用户态能力和应用态能力做清晰区分
 
-#### `feishu-workbench:feishu-office`
+### 办公流
 
-适合：
+适用场景：
 
-- 文档 / Wiki / Drive
-- Sheets / Bitable
-- Calendar / Tasks
-
-核心口径：
-
-- discovery first
-- read before write
-- destructive 操作前明确确认
-
-### 3. 当前不会做的事
-
-这个插件不提供：
-
-- 新的飞书 API 凭据管理
-- 新的飞书 OAuth 服务
-- 新的消息网关
-- 新的飞书 OpenAPI Python 工具实现
-- `hermes feishu-workbench ...` 顶层 CLI 命令
-
-这些能力仍由 Hermes 主体提供。
-
-这个仓库只保留当前实测可用的两块：
-
-1. `pre_llm_call` 飞书任务口径注入
-2. `feishu-workbench:*` plugin skills
-
-## 前置要求
-
-你需要先有一套已经接入飞书的 Hermes。
-
-建议 Hermes 已具备这些能力：
-
-- Feishu gateway / websocket
-- `/feishu auth`
-- `/feishu diagnose`
-- `/feishu doctor`
-- Feishu messages / IM user OAuth
 - docs / wiki / drive
 - sheets / bitable
 - calendar / tasks
 
-如果 Hermes 主体没有对应工具，这个插件不会凭空变出飞书 API 能力。
+目标：
 
-## 飞书开放平台权限配置
+- discovery first：先枚举可见资源，再读，再写
+- 0 结果只表示“当前身份和当前扫描范围没找到”
+- 修改 / 删除 / 发消息这类写操作前应明确目标和内容
+- 结果里说明范围：应用可见、用户 OAuth 可见、已知链接 / 已知 token 等
 
-如果你希望 Hermes 在飞书里实现前面说的完整办公助手能力，需要在 **飞书开放平台** 给对应应用开通权限，并发布应用。
+## 和飞书官方 OpenClaw 插件的关系
 
-入口：
+本插件的设计参考了飞书官方 OpenClaw 插件的体验方向，例如：授权 / 诊断要清晰、飞书资源要先 discovery、卡片和回复要少废话、办公能力覆盖消息、文档、表格、日历、任务。
 
-```text
-飞书开放平台 -> 你的应用 -> 权限管理 -> 批量导入/导出权限 -> 导入
+但当前仓库不是官方插件的移植版，也没有复制官方插件的完整实现。
+
+更准确地说：
+
+- 飞书官方插件：提供完整的 OpenClaw 侧飞书能力实现和交互体验
+- 本仓库：给 Hermes 提供飞书任务口径、skills、工作流约束和 Hermes 特有的使用层适配
+- Hermes 主仓：负责真正的 Feishu tools、gateway、OAuth、卡片回调、API 调用
+
+## 安装方式
+
+### 方式 1：作为 Hermes 插件安装
+
+```bash
+hermes plugins install https://github.com/<yourname>/hermes-feishu-workbench.git
+hermes gateway restart
 ```
 
-然后粘贴下面 JSON。
+### 方式 2：手动安装到插件目录
 
-> 说明：这是一份偏“全能力”的推荐配置，覆盖消息、文档、Wiki、Drive、Sheets、多维表格、日历、任务、通讯录和用户 OAuth。  
-> 如果你只想开最小权限，可以按功能分组删减；但删减后对应 Hermes 能力会不可用。
+```bash
+mkdir -p ~/.hermes/plugins
+git clone https://github.com/<yourname>/hermes-feishu-workbench.git ~/.hermes/plugins/feishu-workbench
+hermes gateway restart
+```
+
+### 方式 3：作为 Python 包安装
+
+```bash
+pip install git+https://github.com/<yourname>/hermes-feishu-workbench.git
+```
+
+Hermes 会通过 entry point 发现插件：
+
+```toml
+[project.entry-points."hermes_agent.plugins"]
+feishu-workbench = "feishu_workbench_plugin:register"
+```
+
+## 使用方式
+
+### 自动注入
+
+当用户消息明显与飞书 / Lark 相关时，插件会通过 `pre_llm_call` 注入上下文规则。
+
+触发关键词包括但不限于：`feishu`、`lark`、`飞书`、`/feishu`、`bitable`、`sheet`、`wiki`、`docx`、`calendar`、`tasklist`、`message_id`、`chat_id`、`thread_id`、`多维表格`、`电子表格`、`日历`、`任务`、`文档`。
+
+### 手动加载 skill
+
+```text
+使用 feishu-workbench:feishu-auth-doctor 检查飞书授权状态
+```
+
+```text
+使用 feishu-workbench:feishu-office 先列可见日历、任务清单和文档资源，再总结
+```
+
+## 推荐的 Hermes 配置
+
+如果你的模型 / 上游接口对大型 tool schema 不稳定，建议给飞书平台使用轻量工具集。
+
+```yaml
+platform_toolsets:
+  feishu:
+    - feishu-lite
+    - no_mcp
+```
+
+`feishu-lite` 只适合 discovery / 轻量状态检查，通常包含：
+
+- `feishu_list_calendars`
+- `feishu_list_tasklists`
+- `feishu_list_docs`
+- `feishu_list_resources`
+- `feishu_search_doc_wiki`
+
+如果你的上游能承受更大的工具 schema，再切回完整飞书工具集：
+
+```yaml
+platform_toolsets:
+  feishu:
+    - feishu
+    - memory
+    - skills
+    - no_mcp
+```
+
+## 飞书开放平台权限参考
+
+本插件本身不申请权限；权限由 Hermes 主体的飞书应用和 OAuth 流程负责。
+
+如果你希望覆盖消息、文档、Drive/Wiki、表格、日历、任务等能力，可在飞书开放平台的“权限管理 -> 批量导入/导出权限”中参考以下配置。
+
+注意：权限是否能获批取决于你的租户、应用类型、企业管理策略和飞书平台审核。不要把“已导入权限”理解成“当前 token 已经拥有权限”；补 scope 后通常需要重新发布应用并重新授权用户 OAuth。
 
 ```json
 {
   "scopes": {
     "tenant": [
-      "application:application:self_manage",
-
+      "contact:contact.base:readonly",
+      "docx:document:create",
+      "docx:document:readonly",
+      "docx:document:write_only",
+      "docx:document.block:convert",
+      "drive:drive.metadata:readonly",
       "im:chat:read",
       "im:chat:update",
-      "im:chat.members:read",
-      "im:message:readonly",
       "im:message.group_at_msg:readonly",
-      "im:message.group_msg",
-      "im:message.group_msg:readonly",
       "im:message.p2p_msg:readonly",
       "im:message.pins:read",
       "im:message.pins:write_only",
       "im:message.reactions:read",
       "im:message.reactions:write_only",
+      "im:message:readonly",
       "im:message:recall",
       "im:message:send_as_bot",
       "im:message:send_multi_users",
       "im:message:send_sys_msg",
       "im:message:update",
       "im:resource",
-
-      "contact:contact.base:readonly",
-      "contact:user.base:readonly",
-      "contact:user.basic_profile:readonly",
-      "contact:user.employee_id:readonly",
-
-      "search:docs:read",
-
-      "drive:drive.metadata:readonly",
-      "drive:file:download",
-      "drive:file:upload",
-
-      "docx:document:create",
-      "docx:document:readonly",
-      "docx:document:write_only",
-      "docx:document.block:convert",
-
-      "docs:document:copy",
-      "docs:document:export",
+      "application:application:self_manage",
+      "cardkit:card:write",
+      "cardkit:card:read",
       "docs:document.comment:create",
       "docs:document.comment:delete",
       "docs:document.comment:read",
       "docs:document.comment:update",
-      "docs:document.comment:write_only",
-      "docs:document.media:download",
-      "docs:document.media:upload",
-
-      "wiki:space:read",
-      "wiki:space:retrieve",
-      "wiki:space:write_only",
-      "wiki:node:read",
-      "wiki:node:retrieve",
-      "wiki:node:create",
-      "wiki:node:move",
-      "wiki:node:copy",
-
-      "sheets:spreadsheet.meta:read",
-      "sheets:spreadsheet:read",
-      "sheets:spreadsheet:create",
-      "sheets:spreadsheet:write_only",
-
-      "base:app:read",
-      "base:app:create",
-      "base:app:update",
-      "base:app:copy",
-      "base:table:read",
-      "base:table:create",
-      "base:table:update",
-      "base:field:read",
-      "base:field:create",
-      "base:field:update",
-      "base:field:delete",
-      "base:record:retrieve",
-      "base:record:create",
-      "base:record:update",
-      "base:record:delete",
-      "base:view:read",
-      "base:view:write_only",
-
-      "calendar:calendar:read",
-      "calendar:calendar.event:read",
-      "calendar:calendar.event:create",
-      "calendar:calendar.event:update",
-      "calendar:calendar.event:reply",
-      "calendar:calendar.free_busy:read",
-
-      "task:task:read",
-      "task:task:write",
-      "task:task:writeonly",
-      "task:tasklist:read",
-      "task:tasklist:write",
-      "task:comment:read",
-      "task:comment:write",
-
-      "cardkit:card:read",
-      "cardkit:card:write"
+      "docs:document.comment:write_only"
     ],
     "user": [
       "offline_access",
-
-      "search:message",
-      "search:docs:read",
-
-      "im:chat:read",
-      "im:chat.members:read",
-      "im:message",
-      "im:message.send_as_user",
-      "im:message:readonly",
-      "im:message.group_msg:get_as_user",
-      "im:message.p2p_msg:get_as_user",
-      "im:message.reactions:read",
-      "im:message.reactions:write_only",
-      "im:resource",
-
       "contact:contact.base:readonly",
       "contact:user.base:readonly",
       "contact:user.basic_profile:readonly",
       "contact:user.employee_id:readonly",
       "contact:user:search",
-
-      "drive:drive.metadata:readonly",
-      "drive:file:download",
-      "drive:file:upload",
-
+      "im:chat.members:read",
+      "im:chat:read",
+      "im:message",
+      "im:message.group_msg:get_as_user",
+      "im:message.p2p_msg:get_as_user",
+      "im:message:readonly",
+      "search:message",
+      "search:docs:read",
+      "docs:document:copy",
+      "docs:document:export",
+      "docs:document.media:download",
+      "docs:document.media:upload",
+      "docs:document.comment:create",
+      "docs:document.comment:read",
+      "docs:document.comment:update",
       "docx:document:create",
       "docx:document:readonly",
       "docx:document:write_only",
-      "docx:document.block:convert",
-
-      "docs:document:copy",
-      "docs:document:export",
-      "docs:document.comment:create",
-      "docs:document.comment:delete",
-      "docs:document.comment:read",
-      "docs:document.comment:update",
-      "docs:document.comment:write_only",
-      "docs:document.media:download",
-      "docs:document.media:upload",
-
+      "drive:drive.metadata:readonly",
+      "drive:file:download",
+      "drive:file:upload",
+      "space:document:move",
+      "space:document:retrieve",
       "wiki:space:read",
       "wiki:space:retrieve",
       "wiki:space:write_only",
       "wiki:node:read",
       "wiki:node:retrieve",
       "wiki:node:create",
-      "wiki:node:move",
       "wiki:node:copy",
-
-      "sheets:spreadsheet.meta:read",
-      "sheets:spreadsheet:read",
-      "sheets:spreadsheet:create",
-      "sheets:spreadsheet:write_only",
-
-      "base:app:read",
+      "wiki:node:move",
       "base:app:create",
+      "base:app:read",
       "base:app:update",
       "base:app:copy",
-      "base:table:read",
       "base:table:create",
+      "base:table:read",
       "base:table:update",
-      "base:field:read",
       "base:field:create",
+      "base:field:read",
       "base:field:update",
       "base:field:delete",
-      "base:record:retrieve",
       "base:record:create",
+      "base:record:retrieve",
       "base:record:update",
       "base:record:delete",
       "base:view:read",
       "base:view:write_only",
-
+      "sheets:spreadsheet:create",
+      "sheets:spreadsheet:read",
+      "sheets:spreadsheet:write_only",
+      "sheets:spreadsheet.meta:read",
       "calendar:calendar:read",
-      "calendar:calendar.event:read",
       "calendar:calendar.event:create",
-      "calendar:calendar.event:update",
+      "calendar:calendar.event:read",
       "calendar:calendar.event:reply",
+      "calendar:calendar.event:update",
       "calendar:calendar.free_busy:read",
-
       "task:task:read",
       "task:task:write",
       "task:task:writeonly",
@@ -360,222 +295,22 @@ feishu-workbench:feishu-office
 }
 ```
 
-### 权限和功能对应关系
+## 已知限制
 
-| 功能 | 主要权限 |
-|---|---|
-| 飞书里和 Hermes 对话、机器人回复 | `im:message.group_at_msg:readonly`, `im:message.p2p_msg:readonly`, `im:message:send_as_bot`, `im:chat:read` |
-| 群聊 / 单聊历史读取、thread 上下文 | `im:message:readonly`, `im:message.group_msg:get_as_user`, `im:message.p2p_msg:get_as_user`, `im:chat:read` |
-| 搜索飞书消息 | `search:message`, `im:message`, `im:message:readonly`, `offline_access` |
-| 用户态发消息 / 回复 | `im:message`, `im:message.send_as_user` |
-| Reaction / 表情 | `im:message.reactions:read`, `im:message.reactions:write_only` |
-| 图片 / 文件 / 媒体资源 | `im:resource`, `drive:file:upload`, `drive:file:download` |
-| 文档 / Wiki / Drive 搜索和读取 | `search:docs:read`, `docx:document:readonly`, `drive:drive.metadata:readonly`, `wiki:space:read`, `wiki:node:read` |
-| 文档创建 / 更新 / 附件 | `docx:document:create`, `docx:document:write_only`, `docx:document.block:convert`, `docs:document.media:upload`, `docs:document.media:download` |
-| 电子表格 Sheets | `sheets:spreadsheet.meta:read`, `sheets:spreadsheet:read`, `sheets:spreadsheet:create`, `sheets:spreadsheet:write_only` |
-| 多维表格 Bitable/Base | `base:app:*`, `base:table:*`, `base:field:*`, `base:record:*`, `base:view:*` 对应的读写权限 |
-| 日历 | `calendar:calendar:read`, `calendar:calendar.event:*`, `calendar:calendar.free_busy:read` |
-| 任务 | `task:task:*`, `task:tasklist:*`, `task:comment:*` |
-| 通讯录 / 找人 / 群成员 | `contact:user:search`, `contact:user.base:readonly`, `contact:contact.base:readonly`, `im:chat.members:read` |
+- 当前插件只是 Hermes 使用层插件；完整工具实现仍在 Hermes 主仓。
+- 飞书 User OAuth 可能会因 refresh token、scope、发布状态、回调配置变化而失效。
+- “列出所有资源”通常只能说“当前身份可见范围内的资源”，不能说成“全账号所有资源”。
+- 飞书 Lite 工具集为了稳定性牺牲了完整操作能力；需要写入 / 修改时请切换到完整 `feishu` 工具集。
+- 如果模型上游对工具 schema 很敏感，完整工具集可能导致 502 / upstream failed；建议先用 `feishu-lite` 验证链路。
 
-### 导入后必须做的事
-
-1. 在飞书开放平台确认新增权限并提交申请。
-2. 发布应用。只保存权限但不发布，线上 bot / OAuth token 不会拿到新权限。
-3. 如果新增了 **用户权限**，需要让 Hermes 重新走一次：
-
-```text
-/feishu auth
-```
-
-4. 授权后建议验证：
-
-```text
-/feishu diagnose
-/feishu doctor
-```
-
-如果 `/feishu doctor` 仍提示缺 scope，通常是：
-
-- 权限导入了但没有发布应用
-- 用户 OAuth 没重授
-- 当前企业没有批准敏感权限
-- 目标文档 / 表格 / 日历 / 任务本身没有共享给当前用户或应用
-
-## 安装
-
-### 方式 1：Hermes 插件安装
+## 本地验证
 
 ```bash
-hermes plugins install https://github.com/guhaigg/hermes-feishu-workbench.git
+python scripts/smoke_test.py
+python -m compileall feishu_workbench_plugin
 ```
 
-然后重启 Hermes。
-
-也可以用 GitHub 简写：
-
-```bash
-hermes plugins install guhaigg/hermes-feishu-workbench
-```
-
-### 方式 2：手动安装到 Hermes 插件目录
-
-把整个项目目录放到：
-
-```text
-~/.hermes/plugins/feishu-workbench/
-```
-
-然后重启 Hermes：
-
-```bash
-hermes gateway restart
-```
-
-如果你的 Hermes 是 supervisor / systemd / 自定义脚本常驻，按你的部署方式重启 gateway。
-
-### 方式 3：Python 包安装
-
-```bash
-pip install git+https://github.com/guhaigg/hermes-feishu-workbench.git
-```
-
-Hermes 会通过 `hermes_agent.plugins` entry point 自动发现插件。
-
-## 关联到 Hermes Skills Hub
-
-Hermes 的插件下载和技能下载是两套入口：
-
-- 插件入口：`hermes plugins install ...`
-- 技能入口：`hermes skills install ...`
-
-这个仓库同时提供了标准 `skills/` 目录，所以也可以作为 Skills Hub 的自定义 GitHub 源使用。
-
-### 直接安装单个 skill
-
-不添加 tap 也可以直接装：
-
-```bash
-hermes skills install guhaigg/hermes-feishu-workbench/skills/feishu-auth-doctor --force
-hermes skills install guhaigg/hermes-feishu-workbench/skills/feishu-chatops --force
-hermes skills install guhaigg/hermes-feishu-workbench/skills/feishu-office --force
-```
-
-### 添加为自定义 skill 源
-
-```bash
-hermes skills tap add guhaigg/hermes-feishu-workbench
-hermes skills search feishu --source github
-```
-
-之后可以通过搜索结果安装。
-
-### 进入 Hermes 官方下载列表
-
-如果要变成 Hermes 里的 `official/...` 技能，需要给 Hermes 官方仓库提交 PR，把技能放进 Hermes 主仓的 `optional-skills/`。这会变成官方可浏览来源：
-
-```bash
-hermes skills browse --source official
-hermes skills install official/<category>/<skill>
-```
-
-当前这个仓库属于社区 GitHub 源；只有合入 Hermes 主仓后才会变成 official。
-
-## 使用
-
-### 自动使用
-
-大多数情况下不用手动操作。
-
-只要用户任务明显和飞书相关，比如：
-
-```text
-帮我看看飞书有哪些表格
-```
-
-```text
-飞书这个群最近聊了什么
-```
-
-```text
-帮我更新一下这个飞书文档
-```
-
-插件会通过 hook 自动注入飞书任务口径。
-
-### 显式加载 skill
-
-如果你想让 Hermes 更强制地遵守某个流程，可以显式调用 plugin skill：
-
-```text
-使用 feishu-workbench:feishu-auth-doctor 帮我排查飞书授权为什么又掉了
-```
-
-```text
-使用 feishu-workbench:feishu-chatops 读取这个 thread 的上下文并总结
-```
-
-```text
-使用 feishu-workbench:feishu-office 先枚举我可见的飞书表格，再决定下一步
-```
-
-### 在 cron / 自动任务中使用
-
-适合把 skill 名写进任务描述里，例如：
-
-```text
-使用 feishu-workbench:feishu-office，每天检查指定飞书表格并汇总异常。
-```
-
-## 验证安装
-
-可以在 Hermes 所在环境里运行一个 Python 检查：
-
-```bash
-python - <<'PY'
-from hermes_cli.plugins import PluginManager
-
-pm = PluginManager()
-pm.discover_and_load()
-
-plugin = pm._plugins.get("feishu-workbench")
-print("enabled:", bool(plugin and plugin.enabled))
-print("error:", None if not plugin else plugin.error)
-print("hooks:", sorted(pm._hooks.keys()))
-print("skills:", sorted(pm._plugin_skills.keys()))
-PY
-```
-
-期望看到：
-
-```text
-enabled: True
-error: None
-hooks: ['pre_llm_call']
-skills:
-  feishu-workbench:feishu-auth-doctor
-  feishu-workbench:feishu-chatops
-  feishu-workbench:feishu-office
-```
-
-也可以检查单个 skill：
-
-```bash
-python - <<'PY'
-import json
-from tools.skills_tool import skill_view
-
-for name in [
-    "feishu-workbench:feishu-auth-doctor",
-    "feishu-workbench:feishu-chatops",
-    "feishu-workbench:feishu-office",
-]:
-    data = json.loads(skill_view(name))
-    print(name, data.get("success"))
-PY
-```
-
-## 仓库结构
+## 目录结构
 
 ```text
 hermes-feishu-workbench/
@@ -599,47 +334,9 @@ hermes-feishu-workbench/
 └── .github/workflows/ci.yml
 ```
 
-## 本地开发
+## 后续方向
 
-```bash
-python -m compileall .
-python scripts/smoke_test.py
-```
-
-## 未来方向
-
-### P1：把更多飞书经验沉淀成 skills
-
-- 飞书表格运维 skill
-- 飞书文档写作 / 审阅 skill
-- 飞书会议纪要 / 日历联动 skill
-- 飞书群聊上下文总结 skill
-
-### P2：做更完整的能力矩阵
-
-- app identity 能力
-- user OAuth 能力
-- scope 映射
-- 缺权限时的建议动作
-
-### P3：把部分 Hermes 主仓改动插件化
-
-目前 Hermes 主仓里已有不少飞书能力增强：
-
-- 授权卡片瘦身
-- 进度卡片瘦身
-- 飞书诊断摘要
-- 表格增强
-- calendar / task / docs / wiki / drive / sheets 工作流约束
-
-后续可以继续抽象成更独立的插件工具，而不是只做提示层。
-
-### P4：适配更多安装方式
-
-- GitHub release
-- pip 包发布
-- Hermes plugins registry / skills hub
-
-## License
-
-MIT
+- 将 Hermes 主仓里更成熟的飞书诊断能力继续拆成可复用插件工具。
+- 增加可执行的权限矩阵检查脚本。
+- 增加根据上游模型能力自动选择 `feishu-lite` / `feishu` 的安装建议。
+- 增加更多真实租户回归用例。
