@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-feishu-workbench"
-version = "0.1.0"
+version = "0.1.1"
 description = "Feishu插件 Hermes特供版本 - Feishu/Lark workflow guardrails and skills for Hermes Agent"
 readme = "README.md"
 requires-python = ">=3.11"
