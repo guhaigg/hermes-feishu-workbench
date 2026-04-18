@@ -12,12 +12,13 @@
 
 ## 当前真实状态
 
-当前版本：`0.1.3`
+当前版本：`0.2.0`
 
 已经包含：
 
 - 一个 Hermes plugin entry point：`feishu-workbench`
 - 一个 `pre_llm_call` hook：识别飞书相关任务后注入简洁口径与 discovery-first 约束
+- 一个 `feishu-workbench-lite` 插件工具集，提供 5 个轻量代理工具，减少大 tool schema 触发上游 502 的概率
 - 3 个 plugin skills：
   - `feishu-workbench:feishu-auth-doctor`
   - `feishu-workbench:feishu-chatops`
@@ -153,17 +154,19 @@ feishu-workbench = "feishu_workbench_plugin:register"
 ```yaml
 platform_toolsets:
   feishu:
-    - feishu-lite
+    - feishu-workbench-lite
     - no_mcp
 ```
 
-`feishu-lite` 只适合 discovery / 轻量状态检查，通常包含：
+`feishu-workbench-lite` 只适合 discovery / 轻量状态检查。本插件会注册这些轻量代理工具：
 
-- `feishu_list_calendars`
-- `feishu_list_tasklists`
-- `feishu_list_docs`
-- `feishu_list_resources`
-- `feishu_search_doc_wiki`
+- `feishu_lite_list_calendars` -> 代理 Hermes 主仓 `feishu_list_calendars`
+- `feishu_lite_list_tasklists` -> 代理 Hermes 主仓 `feishu_list_tasklists`
+- `feishu_lite_list_docs` -> 代理 Hermes 主仓 `feishu_list_docs`
+- `feishu_lite_list_resources` -> 代理 Hermes 主仓 `feishu_list_resources`
+- `feishu_lite_search_doc_wiki` -> 代理 Hermes 主仓 `feishu_search_doc_wiki`
+
+这些工具 schema 比完整 Feishu 工具集小很多，适合先验证链路。注意：它们仍然依赖 Hermes 主仓已经存在对应底层 Feishu tools；插件只是提供轻量暴露层，不自己实现飞书 OpenAPI。
 
 如果你的上游能承受更大的工具 schema，再切回完整飞书工具集：
 
@@ -301,7 +304,7 @@ platform_toolsets:
 - 飞书 User OAuth 可能会因 refresh token、scope、发布状态、回调配置变化而失效。
 - “列出所有资源”通常只能说“当前身份可见范围内的资源”，不能说成“全账号所有资源”。
 - 飞书 Lite 工具集为了稳定性牺牲了完整操作能力；需要写入 / 修改时请切换到完整 `feishu` 工具集。
-- 如果模型上游对工具 schema 很敏感，完整工具集可能导致 502 / upstream failed；建议先用 `feishu-lite` 验证链路。
+- 如果模型上游对工具 schema 很敏感，完整工具集可能导致 502 / upstream failed；建议先用 `feishu-workbench-lite` 验证链路。
 
 ## 本地验证
 
@@ -338,5 +341,5 @@ hermes-feishu-workbench/
 
 - 将 Hermes 主仓里更成熟的飞书诊断能力继续拆成可复用插件工具。
 - 增加可执行的权限矩阵检查脚本。
-- 增加根据上游模型能力自动选择 `feishu-lite` / `feishu` 的安装建议。
+- 增加根据上游模型能力自动选择 `feishu-workbench-lite` / `feishu` 的安装建议。
 - 增加更多真实租户回归用例。
