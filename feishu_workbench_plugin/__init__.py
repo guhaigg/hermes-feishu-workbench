@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
+
+from .lite_tools import check_available, lite_tools
 
 _PLUGIN_ROOT = Path(__file__).parent
 
@@ -16,7 +17,7 @@ _FEISHU_CONTEXT = """[Feishu插件 Hermes特供版本]
 - 0 结果不等于不存在；明确区分“无结果”“无权限”“应用不可见”“未授权”。
 - 缺权限时直接指出缺什么 scope 或授权动作，不要长篇解释内部机制。
 - 回执和状态信息保持紧凑；避免原始 URL、长 scope 列表、内部 trace 套话。
-- 如果可用工具里出现 feishu_lite_*，这些是本插件提供的轻量 discovery 代理工具；优先用它们完成日历、任务清单、文档/资源枚举。
+- 如果可用工具里出现 feishu_lite_*，这些是本插件提供的轻量 discovery 工具；优先用它们完成日历、任务清单、文档/资源枚举。
 """
 
 _KEYWORDS = (
@@ -43,14 +44,6 @@ _KEYWORDS = (
     "文档",
 )
 
-_LITE_TARGETS = {
-    "feishu_lite_list_calendars": "feishu_list_calendars",
-    "feishu_lite_list_tasklists": "feishu_list_tasklists",
-    "feishu_lite_list_docs": "feishu_list_docs",
-    "feishu_lite_list_resources": "feishu_list_resources",
-    "feishu_lite_search_doc_wiki": "feishu_search_doc_wiki",
-}
-
 
 def _looks_like_feishu_turn(*, user_message: str, platform: str) -> bool:
     if str(platform or "").strip().lower() == "feishu":
@@ -74,35 +67,6 @@ def _inject_feishu_context(
     return {"context": _FEISHU_CONTEXT}
 
 
-def _dispatch_existing_tool(tool_name: str, args: dict, **kwargs: Any) -> str:
-    """Call a Hermes built-in Feishu tool while exposing a smaller schema."""
-    try:
-        from tools.registry import registry
-
-        payload = dict(args or {})
-        nested_payload = payload.pop("payload", None)
-        if isinstance(nested_payload, dict):
-            payload.update(nested_payload)
-        return registry.dispatch(tool_name, payload, **kwargs)
-    except Exception as exc:  # Keep handlers JSON-only, as Hermes tools expect.
-        return json.dumps(
-            {
-                "success": False,
-                "error": str(exc),
-                "proxied_tool": tool_name,
-                "next_step": "确认 Hermes 主仓已安装并启用对应 Feishu tool，或切回主仓完整 Feishu 工具集。",
-            },
-            ensure_ascii=False,
-        )
-
-
-def _make_lite_handler(target_tool: str):
-    def _handler(args: dict, **kwargs: Any) -> str:
-        return _dispatch_existing_tool(target_tool, args, **kwargs)
-
-    return _handler
-
-
 def _lite_schema(name: str, description: str) -> dict[str, Any]:
     return {
         "name": name,
@@ -110,27 +74,13 @@ def _lite_schema(name: str, description: str) -> dict[str, Any]:
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Optional search keyword or title filter.",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Optional max result count.",
-                    "minimum": 1,
-                    "maximum": 50,
-                },
-                "page_size": {
-                    "type": "integer",
-                    "description": "Optional Feishu page size.",
-                    "minimum": 1,
-                    "maximum": 50,
-                },
-                "payload": {
-                    "type": "object",
-                    "description": "Optional raw passthrough args for the underlying Hermes Feishu tool.",
-                    "additionalProperties": True,
-                },
+                "query": {"type": "string", "description": "Optional title keyword filter."},
+                "space_id": {"type": "string", "description": "Optional wiki space ID filter."},
+                "parent_node_token": {"type": "string", "description": "Optional wiki parent node token filter."},
+                "limit": {"type": "integer", "description": "Optional result limit.", "minimum": 1, "maximum": 50},
+                "page_size": {"type": "integer", "description": "Optional page size.", "minimum": 1, "maximum": 50},
+                "max_nodes": {"type": "integer", "description": "Optional wiki scan node budget.", "minimum": 1, "maximum": 1000},
+                "obj_types": {"type": ["string", "array"], "description": "Optional object-type filter."},
             },
             "additionalProperties": True,
         },
@@ -138,20 +88,15 @@ def _lite_schema(name: str, description: str) -> dict[str, Any]:
 
 
 def _register_lite_tools(ctx: Any) -> None:
-    descriptions = {
-        "feishu_lite_list_calendars": "List calendars visible to the current Hermes Feishu identity via the underlying feishu_list_calendars tool.",
-        "feishu_lite_list_tasklists": "List tasklists visible to the current Hermes Feishu identity via the underlying feishu_list_tasklists tool.",
-        "feishu_lite_list_docs": "List docs/wiki resources visible to Hermes via the underlying feishu_list_docs tool.",
-        "feishu_lite_list_resources": "List mixed Feishu resources visible to Hermes via the underlying feishu_list_resources tool.",
-        "feishu_lite_search_doc_wiki": "Search Feishu docs/wiki using the underlying feishu_search_doc_wiki tool.",
-    }
-    for name, target in _LITE_TARGETS.items():
+    for name, meta in lite_tools().items():
         ctx.register_tool(
             name=name,
             toolset="feishu-workbench-lite",
-            schema=_lite_schema(name, descriptions[name]),
-            handler=_make_lite_handler(target),
-            description=descriptions[name],
+            schema=_lite_schema(name, meta["description"]),
+            handler=meta["handler"],
+            check_fn=check_available,
+            requires_env=["FEISHU_APP_ID", "FEISHU_APP_SECRET"],
+            description=meta["description"],
             emoji="🪶",
         )
 
