@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hermes-feishu-workbench"
 version = "0.3.0"
-description = "Feishu插件 Hermes特供版本 - Feishu/Lark workflow guardrails and skills for Hermes Agent"
+description = "Feishu插件 Hermes特供版本（已暂停适配，请转向其他仍在维护的方案使用）"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
